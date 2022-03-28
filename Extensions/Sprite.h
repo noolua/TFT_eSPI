@@ -52,7 +52,7 @@ class TFT_eSprite : public TFT_eSPI {
            // Set foreground and background colours for 1 bit per pixel Sprite
   void     setBitmapColor(uint16_t fg, uint16_t bg);
 
-  void     drawPixel(int32_t x, int32_t y, uint32_t color);
+  virtual void     drawPixel(int32_t x, int32_t y, uint32_t color);
 
   void     drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uint32_t bg, uint8_t font),
 
