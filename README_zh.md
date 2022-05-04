@@ -23,12 +23,20 @@ void TFT_eSprite::setUUFont(const uufont_t *f = NULL);
 ```cpp
 // 伪代码示例
   TFT_eSPI    tft = TFT_eSPI();
-  tft.setUUFont(&ZfullGB12pt_12pt); // 12px 的字体
+  tft.setUUFont(&ZfullGB12pt_12pt); // 12px的字体
   tft.setTextColor(TFT_CYAN);
   tft.setTextSize(1);
   tft.setCursor(2, 32);
   tft.printf("舌尖上的%s, %s", "五花", "設計上的五花");
   tft.setUUFont(NULL);
+
+  sprite->setUUFont(&ZfullGB8pt_8pt); // 8px的字体
+  sprite->setTextColor(TFT_CYAN);
+  sprite->setTextSize(1);
+  sprite->setCursor(2, 100);
+  sprite->printf("%s, %s", "Pork belly on the tip of the tongue", "舌先の豚バラ肉");
+  sprite->setUUFont(NULL);
+
 ```
 
 ##### 字体来源
@@ -60,8 +68,8 @@ https://github.com/andot/zfull-for-yosemite/blob/master/fonts/Zfull-GB.ttf
 
 #include <TFT_eSPI.h>
 #define USE_TFT_eSPI
-#include "zfullgb8pt.h"
-#include "zfullgb12pt.h"
+// #include "zfullgb8pt.h"
+// #include "zfullgb12pt.h"
 
 // Library instance
 TFT_eSPI    tft = TFT_eSPI();         // Declare object "tft"

@@ -28,6 +28,8 @@
   #include <Fonts/Custom/Yellowtail_32.h>     // CF_Y32
   #include <Fonts/UUFont/Dinkie7_8pt.h>
   #include <Fonts/UUFont/Dinkie9_10pt.h>
+  #include <Fonts/UUFont/zfullgb8pt.h>
+  #include <Fonts/UUFont/zfullgb12pt.h>
 
 #endif
 
