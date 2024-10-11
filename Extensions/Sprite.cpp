@@ -2101,7 +2101,12 @@ void TFT_eSprite::drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uin
           if (size == 1) {
             drawPixel(x + xo + xx, y + yo + yy, color);
           } else {
-            fillRect(x + (xo16 + xx) * size, y + (yo16 + yy) * size, size, size, color);
+            for(int j=0;j<size;j++){
+              for(int k=0;k<size;k++){
+                drawPixel(x + (xo16 + xx) * size +j, y + (yo16 + yy) * size + k, color);
+              }
+            }
+            // fillRect(x + (xo16 + xx) * size, y + (yo16 + yy) * size, size, size, color);
           }
         }
         bits <<= 1;
@@ -2263,7 +2268,7 @@ int16_t TFT_eSprite::drawChar(uint16_t uniCode, int32_t x, int32_t y, uint8_t fo
   if ((xd + width * textsize < _vpX || xd >= _vpW) && (yd + height * textsize < _vpY || yd >= _vpH)) return width * textsize ;
 
   int32_t w = width;
-  int32_t pX      = 0;
+  // int32_t pX      = 0;
   int32_t pY      = y;
   uint8_t line = 0;
   bool clip = xd < _vpX || xd + width  * textsize >= _vpW || yd < _vpY || yd + height * textsize >= _vpH;

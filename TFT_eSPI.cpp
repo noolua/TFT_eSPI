@@ -4679,7 +4679,7 @@ int16_t TFT_eSPI::drawChar(uint16_t uniCode, int32_t x, int32_t y, uint8_t font)
   if ((xd + width * textsize < _vpX || xd >= _vpW) && (yd + height * textsize < _vpY || yd >= _vpH)) return width * textsize ;
 
   int32_t w = width;
-  int32_t pX      = 0;
+  // int32_t pX      = 0;
   int32_t pY      = y;
   uint8_t line = 0;
   bool clip = xd < _vpX || xd + width  * textsize >= _vpW || yd < _vpY || yd + height * textsize >= _vpH;
