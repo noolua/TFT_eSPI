@@ -1989,7 +1989,7 @@ void TFT_eSprite::drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uin
 #ifdef LOAD_GLCD
 //>>>>>>>>>>>>>>>>>>
 #ifdef LOAD_GFXFF
-  if(!gfxFont) { // 'Classic' built-in font
+  if(!gfxFont && !uuFont) { // 'Classic' built-in font
 #endif
 //>>>>>>>>>>>>>>>>>>
 
@@ -2058,7 +2058,63 @@ void TFT_eSprite::drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uin
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>
 #ifdef LOAD_GFXFF
-  } else { // Custom font
+  } else if(uuFont) {
+    //MMX
+    const uuglyph_t *glyph = get_glyph(uuFont, c);
+    const uint8_t *bitmap = glyph->bitmap;
+    uint16_t bo = 0;
+    const uint8_t w = pgm_read_byte(&glyph->width), h = pgm_read_byte(&glyph->height);
+    const int8_t xo = pgm_read_byte(&glyph->offsetx), yo = pgm_read_byte(&glyph->offsety);
+    uint8_t xx, yy, bits = 0, bit = 0;
+    int16_t xo16 = 0, yo16 = 0;
+
+    if (size > 1) {
+      xo16 = xo;
+      yo16 = yo;
+    }
+    // Todo: Add character clipping here
+
+    // NOTE: THERE IS NO 'BACKGROUND' COLOR OPTION ON CUSTOM FONTS.
+    // THIS IS ON PURPOSE AND BY DESIGN.  The background color feature
+    // has typically been used with the 'classic' font to overwrite old
+    // screen contents with new data.  This ONLY works because the
+    // characters are a uniform size; it's not a sensible thing to do with
+    // proportionally-spaced fonts with glyphs of varying sizes (and that
+    // may overlap).  To replace previously-drawn text when using a custom
+    // font, use the getTextBounds() function to determine the smallest
+    // rectangle encompassing a string, erase the area with fillRect(),
+    // then draw new text.  This WILL infortunately 'blink' the text, but
+    // is unavoidable.  Drawing 'background' pixels will NOT fix this,
+    // only creates a new set of problems.  Have an idea to work around
+    // this (a canvas object type for MCUs that can afford the RAM and
+    // displays supporting setAddrWindow() and pushColors()), but haven't
+    // implemented this yet.
+
+    //begin_tft_write();          // Sprite class can use this function, avoiding begin_tft_write()
+    inTransaction = true;
+    for (yy = 0; yy < h; yy++) {
+      for (xx = 0; xx < w; xx++) {
+        if (!(bit++ & 7)) {
+          bits = pgm_read_byte(&bitmap[bo++]);
+        }
+        if (bits & 0x80) {
+          if (size == 1) {
+            drawPixel(x + xo + xx, y + yo + yy, color);
+          } else {
+            for(int j=0;j<size;j++){
+              for(int k=0;k<size;k++){
+                drawPixel(x + (xo16 + xx) * size +j, y + (yo16 + yy) * size + k, color);
+              }
+            }
+            // fillRect(x + (xo16 + xx) * size, y + (yo16 + yy) * size, size, size, color);
+          }
+        }
+        bits <<= 1;
+      }
+    }
+    inTransaction = lockTransaction;
+    end_tft_write();              // Does nothing if Sprite class uses this function
+  } else if(gfxFont) { // Custom font
 #endif
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>
 #endif // LOAD_GLCD
@@ -2166,14 +2222,18 @@ int16_t TFT_eSprite::drawChar(uint16_t uniCode, int32_t x, int32_t y, uint8_t fo
 
 #ifdef LOAD_GFXFF
     drawChar(x, y, uniCode, textcolor, textbgcolor, textsize);
-    if(!gfxFont) { // 'Classic' built-in font
+    if(!gfxFont && !uuFont) { // 'Classic' built-in font
     #ifdef LOAD_GLCD
       return 6 * textsize;
     #else
       return 0;
     #endif
     }
-    else {
+    else if(uuFont){
+      const uuglyph_t *glyph = get_glyph(uuFont, uniCode);
+      return pgm_read_byte(&glyph->advancex) * textsize;
+    }
+    else if(gfxFont) {
       if((uniCode >= pgm_read_word(&gfxFont->first)) && (uniCode <= pgm_read_word(&gfxFont->last) )) {
         uint16_t   c2    = uniCode - pgm_read_word(&gfxFont->first);
         GFXglyph *glyph = &(((GFXglyph *)pgm_read_dword(&gfxFont->glyph))[c2]);

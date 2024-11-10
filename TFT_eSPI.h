@@ -213,6 +213,7 @@
   // We can include all the free fonts and they will only be built into
   // the sketch if they are used
   #include <Fonts/GFXFF/gfxfont.h>
+  #include <Fonts/UUFont/uufont.h>
   // Call up any user custom fonts
   #include <User_Setups/User_Custom_Fonts.h>
 #endif // #ifdef LOAD_GFXFF
@@ -670,6 +671,7 @@ class TFT_eSPI : public Print { friend class TFT_eSprite; // Sprite class has ac
   uint16_t getTextPadding(void);                            // Get text padding
 
 #ifdef LOAD_GFXFF
+  void     setUUFont(const uufont_t *f = NULL);             // Select the UUFont
   void     setFreeFont(const GFXfont *f = NULL),            // Select the GFX Free Font
            setTextFont(uint8_t font);                       // Set the font number to use in future
 #else
@@ -954,6 +956,7 @@ class TFT_eSPI : public Print { friend class TFT_eSprite; // Sprite class has ac
 
 #ifdef LOAD_GFXFF
   GFXfont  *gfxFont;
+  uufont_t *uuFont;
 #endif
 
 /***************************************************************************************

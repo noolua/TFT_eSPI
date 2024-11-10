@@ -33,6 +33,10 @@
   #include "Processors/TFT_eSPI_Generic.c"
 #endif
 
+#ifdef LOAD_GFXFF
+  #include "Fonts/UUFont/uufont.c"
+#endif
+
 #ifndef SPI_BUSY_CHECK
   #define SPI_BUSY_CHECK
 #endif
@@ -3112,7 +3116,13 @@ int16_t TFT_eSPI::textWidth(const char *string, uint8_t font)
   else {
 
 #ifdef LOAD_GFXFF
-    if(gfxFont) { // New font
+    if(uuFont) {
+      while (*string) {
+        uniCode = decodeUTF8(*string++);
+        const uuglyph_t *glyph = get_glyph(uuFont, uniCode);
+        str_width += ((int8_t)pgm_read_byte(&glyph->offsetx) + pgm_read_byte(&glyph->width));
+      }
+    }else if(gfxFont) { // New font
       while (*string) {
         uniCode = decodeUTF8(*string++);
         if ((uniCode >= pgm_read_word(&gfxFont->first)) && (uniCode <= pgm_read_word(&gfxFont->last ))) {
@@ -3163,7 +3173,9 @@ int16_t TFT_eSPI::fontHeight(uint8_t font)
 
 #ifdef LOAD_GFXFF
   if (font==1) {
-    if(gfxFont) { // New font
+    if(uuFont) {
+      return pgm_read_byte(&uuFont->advancey) * textsize;
+    }else if(gfxFont) { // New font
       return pgm_read_byte(&gfxFont->yAdvance) * textsize;
     }
   }
@@ -3187,7 +3199,7 @@ void TFT_eSPI::drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uint32
 #ifdef LOAD_GLCD
 //>>>>>>>>>>>>>>>>>>
   #ifdef LOAD_GFXFF
-  if(!gfxFont) { // 'Classic' built-in GLCD font
+  if(!gfxFont && !uuFont) { // 'Classic' built-in GLCD font
   #endif
 //>>>>>>>>>>>>>>>>>>
 
@@ -3258,7 +3270,58 @@ void TFT_eSPI::drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uint32
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>
   #ifdef LOAD_GFXFF
-  } else { // Custom font
+  } else if(uuFont) {
+    //MMX
+    const uuglyph_t *glyph = get_glyph(uuFont, c);
+    const uint8_t *bitmap = glyph->bitmap;
+    uint16_t bo = 0;
+    const uint8_t w = pgm_read_byte(&glyph->width), h = pgm_read_byte(&glyph->height);
+    const int8_t xo = pgm_read_byte(&glyph->offsetx), yo = pgm_read_byte(&glyph->offsety);
+    uint8_t xx, yy, bits = 0, bit = 0;
+    int16_t xo16 = 0, yo16 = 0;
+
+    if (size > 1) {
+      xo16 = xo;
+      yo16 = yo;
+    }
+    // Todo: Add character clipping here
+
+    // NOTE: THERE IS NO 'BACKGROUND' COLOR OPTION ON CUSTOM FONTS.
+    // THIS IS ON PURPOSE AND BY DESIGN.  The background color feature
+    // has typically been used with the 'classic' font to overwrite old
+    // screen contents with new data.  This ONLY works because the
+    // characters are a uniform size; it's not a sensible thing to do with
+    // proportionally-spaced fonts with glyphs of varying sizes (and that
+    // may overlap).  To replace previously-drawn text when using a custom
+    // font, use the getTextBounds() function to determine the smallest
+    // rectangle encompassing a string, erase the area with fillRect(),
+    // then draw new text.  This WILL infortunately 'blink' the text, but
+    // is unavoidable.  Drawing 'background' pixels will NOT fix this,
+    // only creates a new set of problems.  Have an idea to work around
+    // this (a canvas object type for MCUs that can afford the RAM and
+    // displays supporting setAddrWindow() and pushColors()), but haven't
+    // implemented this yet.
+
+    //begin_tft_write();          // Sprite class can use this function, avoiding begin_tft_write()
+    inTransaction = true;
+    for (yy = 0; yy < h; yy++) {
+      for (xx = 0; xx < w; xx++) {
+        if (!(bit++ & 7)) {
+          bits = pgm_read_byte(&bitmap[bo++]);
+        }
+        if (bits & 0x80) {
+          if (size == 1) {
+            drawPixel(x + xo + xx, y + yo + yy, color);
+          } else {
+            fillRect(x + (xo16 + xx) * size, y + (yo16 + yy) * size, size, size, color);
+          }
+        }
+        bits <<= 1;
+      }
+    }
+    inTransaction = lockTransaction;
+    end_tft_write();              // Does nothing if Sprite class uses this function
+  } else if(gfxFont) { // Custom font  #endif
   #endif
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>
 #endif // LOAD_GLCD
@@ -5088,7 +5151,7 @@ size_t TFT_eSPI::write(uint8_t utf8)
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #ifdef LOAD_GFXFF
-  if(!gfxFont) {
+  if(!gfxFont && !uuFont) {
 #endif
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -5145,7 +5208,27 @@ size_t TFT_eSPI::write(uint8_t utf8)
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #ifdef LOAD_GFXFF
   } // Custom GFX font
-  else {
+  else if(uuFont) {
+    if(utf8 == '\n'){
+      cursor_x = 0;
+      cursor_y += (int16_t)textsize * (uint8_t)pgm_read_byte(&uuFont->advancey);
+    } else {
+      const uuglyph_t* glyph = get_glyph(uuFont, uniCode);
+      uint8_t w = pgm_read_byte(&glyph->width),
+              h = pgm_read_byte(&glyph->height);
+      if(w > 0 && h > 0){
+        int16_t xo = (int8_t)pgm_read_byte(&glyph->offsetx);
+        if(textwrapX && ((cursor_x + textsize * (xo + w)) > width())){
+          cursor_x = 0;
+          cursor_y += (int16_t)textsize * (uint8_t)pgm_read_byte(&uuFont->advancey);
+        }
+        if(textwrapY && (cursor_y >= (int32_t) height())) cursor_y = 0;
+        drawChar(cursor_x, cursor_y, uniCode, textcolor, textbgcolor, textsize);
+      }
+      cursor_x += pgm_read_byte(&glyph->advancex) * (int16_t)textsize;
+    }
+  }
+  else if(gfxFont) {
     if(utf8 == '\n') {
       cursor_x  = 0;
       cursor_y += (int16_t)textsize * (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
@@ -5207,14 +5290,18 @@ int16_t TFT_eSPI::drawChar(uint16_t uniCode, int32_t x, int32_t y, uint8_t font)
 
 #ifdef LOAD_GFXFF
     drawChar(x, y, uniCode, textcolor, textbgcolor, textsize);
-    if(!gfxFont) { // 'Classic' built-in font
+    if(!gfxFont && !uuFont) { // 'Classic' built-in font
     #ifdef LOAD_GLCD
       return 6 * textsize;
     #else
       return 0;
     #endif
     }
-    else {
+    else if(uuFont) {
+      const uuglyph_t *glyph = get_glyph(uuFont, uniCode);
+      return pgm_read_byte(&glyph->advancex) * textsize;
+    }
+    else if(gfxFont) {
       if((uniCode >= pgm_read_word(&gfxFont->first)) && (uniCode <= pgm_read_word(&gfxFont->last) )) {
         uint16_t   c2    = uniCode - pgm_read_word(&gfxFont->first);
         GFXglyph *glyph = &(((GFXglyph *)pgm_read_dword(&gfxFont->glyph))[c2]);
@@ -5512,9 +5599,9 @@ int16_t TFT_eSPI::drawString(const char *string, int32_t poX, int32_t poY, uint8
 
 #ifdef LOAD_GFXFF
   #ifdef SMOOTH_FONT
-    bool freeFont = (font == 1 && gfxFont && !fontLoaded);
+    bool freeFont = (font == 1 && (gfxFont || uuFont) && !fontLoaded);
   #else
-    bool freeFont = (font == 1 && gfxFont);
+    bool freeFont = (font == 1 && (gfxFont || uuFont));
   #endif
 
   if (freeFont) {
@@ -5612,17 +5699,25 @@ int16_t TFT_eSPI::drawString(const char *string, int32_t poX, int32_t poY, uint8
 
       while (n < len && c2 == 0) c2 = decodeUTF8((uint8_t*)string, &n, len - n);
 
-      if((c2 >= pgm_read_word(&gfxFont->first)) && (c2 <= pgm_read_word(&gfxFont->last) )) {
-        c2 -= pgm_read_word(&gfxFont->first);
-        GFXglyph *glyph = &(((GFXglyph *)pgm_read_dword(&gfxFont->glyph))[c2]);
-        xo = pgm_read_byte(&glyph->xOffset) * textsize;
-        // Adjust for negative xOffset
-        if (xo > 0) xo = 0;
+      if(uuFont){
+        const uuglyph_t *glyph = get_glyph(uuFont, c2);
+        xo = pgm_read_byte(&glyph->offsetx) * textsize;
+        if(xo > 0) xo = 0;
         else cwidth -= xo;
-        // Add 1 pixel of padding all round
-        //cheight +=2;
-        //fillRect(poX+xo-1, poY - 1 - glyph_ab * textsize, cwidth+2, cheight, textbgcolor);
         fillRect(poX+xo, poY - glyph_ab * textsize, cwidth, cheight, textbgcolor);
+      }else if(gfxFont) {
+        if((c2 >= pgm_read_word(&gfxFont->first)) && (c2 <= pgm_read_word(&gfxFont->last) )) {
+          c2 -= pgm_read_word(&gfxFont->first);
+          GFXglyph *glyph = &(((GFXglyph *)pgm_read_dword(&gfxFont->glyph))[c2]);
+          xo = pgm_read_byte(&glyph->xOffset) * textsize;
+          // Adjust for negative xOffset
+          if (xo > 0) xo = 0;
+          else cwidth -= xo;
+          // Add 1 pixel of padding all round
+          //cheight +=2;
+          //fillRect(poX+xo-1, poY - 1 - glyph_ab * textsize, cwidth+2, cheight, textbgcolor);
+          fillRect(poX+xo, poY - glyph_ab * textsize, cwidth, cheight, textbgcolor);
+        }
       }
       padding -=100;
     }
@@ -5698,7 +5793,7 @@ int16_t TFT_eSPI::drawString(const char *string, int32_t poX, int32_t poY, uint8
   if((padX>sumX) && (textcolor!=textbgcolor)) {
     int16_t padXc = poX+sumX; // Maximum left side padding
 #ifdef LOAD_GFXFF
-    if ((font == 1) && (gfxFont)) poY -= glyph_ab;
+    if ((font == 1) && (gfxFont||uuFont)) poY -= glyph_ab;
 #endif
     drawRect(poX,poY,sumX,cheight, TFT_GREEN);
     switch(padding) {
@@ -5877,6 +5972,22 @@ int16_t TFT_eSPI::drawFloat(float floatNumber, uint8_t dp, int32_t poX, int32_t 
 ***************************************************************************************/
 
 #ifdef LOAD_GFXFF
+void TFT_eSPI::setUUFont(const uufont_t *f){
+  if(f == nullptr) {
+    setTextFont(1);
+    return;
+  }
+  textfont = 1;
+  uuFont = (uufont_t *)f;
+  gfxFont = NULL;
+
+  glyph_ab = 0;
+  glyph_bb = 0;
+  uufontblock_t *blk = &(((uufontblock_t *)(void *)pgm_read_dword(&uuFont->blocks))[0]);
+  const uuglyph_t *glyph = get_glyph(uuFont, blk->first_code);
+  glyph_ab = -pgm_read_byte(&glyph->offsety);
+  glyph_bb = pgm_read_byte(&glyph->height) - glyph_ab;
+}
 
 void TFT_eSPI::setFreeFont(const GFXfont *f)
 {
@@ -5887,6 +5998,7 @@ void TFT_eSPI::setFreeFont(const GFXfont *f)
 
   textfont = 1;
   gfxFont = (GFXfont *)f;
+  uuFont = NULL;
 
   glyph_ab = 0;
   glyph_bb = 0;
@@ -5912,6 +6024,7 @@ void TFT_eSPI::setTextFont(uint8_t f)
   textfont = (f > 0) ? f : 1; // Don't allow font 0
   textfont = (f > 8) ? 1 : f; // Don't allow font > 8
   gfxFont = NULL;
+  uuFont = NULL;
 }
 
 #else

@@ -26,7 +26,8 @@
   #include <Fonts/Custom/Roboto_Thin_24.h>    // CF_RT24
   #include <Fonts/Custom/Satisfy_24.h>        // CF_S24
   #include <Fonts/Custom/Yellowtail_32.h>     // CF_Y32
-
+  #include <Fonts/UUFont/Dinkie7_8pt.h>
+  #include <Fonts/UUFont/Dinkie9_10pt.h>
 #endif
 
 // Shorthand references - any coding scheme can be used, here CF_ = Custom Font

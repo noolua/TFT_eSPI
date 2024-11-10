@@ -53,7 +53,7 @@ class TFT_eSprite : public TFT_eSPI {
   void     setBitmapColor(uint16_t fg, uint16_t bg);
 
            // Draw a single pixel at x,y
-  void     drawPixel(int32_t x, int32_t y, uint32_t color);
+  virtual void     drawPixel(int32_t x, int32_t y, uint32_t color);
 
            // Draw a single character in the GLCD or GFXFF font
   void     drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uint32_t bg, uint8_t size),
